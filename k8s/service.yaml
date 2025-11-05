@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-api
+  namespace: microservices
+  labels:
+    app: user-api
+spec:
+  type: LoadBalancer
+  externalIPs:
+    - 192.168.2.88
+  selector:
+    app: user-api
+  ports:
+  - port: 5001
+    targetPort: 5001
+    protocol: TCP
