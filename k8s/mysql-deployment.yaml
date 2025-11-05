@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-db
+  namespace: microservices
+  labels:
+    app: user-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: user-db
+  template:
+    metadata:
+      labels:
+        app: user-db
+    spec:
+      containers:
+      - name: user-db
+        image: mysql:8
+        ports:
+        - containerPort: 3306
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: "pfm_dc_2020"
+        - name: MYSQL_DATABASE
+          value: "user"
+        - name: MYSQL_USER
+          value: "cloudacademy"
+        - name: MYSQL_PASSWORD
+          value: "pfm_2020"

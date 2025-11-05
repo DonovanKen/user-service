@@ -22,10 +22,7 @@ spec:
         - containerPort: 5001
         env:
         - name: DATABASE_URL
-          valueFrom:
-            secretKeyRef:
-              name: user-db-secret
-              key: url
+          value: "mysql+pymysql://cloudacademy:pfm_2020@user-db:3306/user"
         resources:
           requests:
             memory: "128Mi"
@@ -37,11 +34,11 @@ spec:
           httpGet:
             path: /health
             port: 5001
-          initialDelaySeconds: 30
+          initialDelaySeconds: 60
           periodSeconds: 10
         readinessProbe:
           httpGet:
             path: /health
             port: 5001
-          initialDelaySeconds: 5
+          initialDelaySeconds: 30
           periodSeconds: 5
