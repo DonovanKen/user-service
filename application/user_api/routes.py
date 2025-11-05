@@ -7,6 +7,10 @@ from flask_login import current_user, login_user, logout_user, login_required
 
 from passlib.hash import sha256_crypt
 
+# Health endpoint for Kubernetes and container testing
+@user_api_blueprint.route('/health')
+def health_check():
+    return jsonify({'status': 'healthy', 'service': 'user-service'}), 200
 
 @login_manager.user_loader
 def load_user(user_id):
