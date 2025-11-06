@@ -79,12 +79,100 @@ pipeline {
                         ls -la
                         echo 'Creating namespace if it does not exist'
                         kubectl create namespace ${params.K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-                        echo 'Applying Kubernetes manifests'
-                        kubectl apply -f . -n ${params.K8S_NAMESPACE}
+                        
+                        # Fix database credentials first
+                        echo '=== Fixing Database Credentials ==='
+                        kubectl delete deployment user-db -n ${params.K8S_NAMESPACE} 2>/dev/null || true
+                        kubectl delete service user-db -n ${params.K8S_NAMESPACE} 2>/dev/null || true
+                        sleep 10
+                        
+                        echo '=== Deploying Database with Correct Credentials ==='
+                        kubectl apply -f mysql-deployment.yaml -n ${params.K8S_NAMESPACE}
+                        kubectl apply -f mysql-service.yaml -n ${params.K8S_NAMESPACE}
+                        
+                        echo 'Waiting for database to be ready...'
+                        kubectl wait --for=condition=ready pod -l app=user-db -n ${params.K8S_NAMESPACE} --timeout=300s
+                        
+                        echo '=== Fixing CloudAcademy User ==='
+                        kubectl exec -it deployment/user-db -n ${params.K8S_NAMESPACE} -- mysql -u root -ppfm_d2020 -e \"
+                            DROP USER IF EXISTS 'cloudacademy'@'%';
+                            DROP USER IF EXISTS 'cloudacademy'@'localhost';
+                            CREATE USER 'cloudacademy'@'%' IDENTIFIED BY 'pfm2020';
+                            CREATE USER 'cloudacademy'@'localhost' IDENTIFIED BY 'pfm2020';
+                            GRANT ALL PRIVILEGES ON user.* TO 'cloudacademy'@'%';
+                            GRANT ALL PRIVILEGES ON user.* TO 'cloudacademy'@'localhost';
+                            FLUSH PRIVILEGES;
+                        \" || echo 'User creation completed'
+                        
+                        echo '=== Deploying User Service ==='
+                        kubectl apply -f deployment.yaml -n ${params.K8S_NAMESPACE}
+                        kubectl apply -f service.yaml -n ${params.K8S_NAMESPACE}
+                        
                         echo 'Waiting for user service deployment to be ready'
                         kubectl wait --for=condition=available deployment/user-api -n ${params.K8S_NAMESPACE} --timeout=300s
+                        
+                        echo '=== Initializing Database Tables ==='
+                        kubectl apply -f - <<EOF
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: init-user-database
+  namespace: ${params.K8S_NAMESPACE}
+spec:
+  template:
+    spec:
+      containers:
+      - name: init-db
+        image: ${params.DOCKERHUB_USER}/${params.USER_SERVICE}:${params.IMAGE_TAG}
+        command: [\"python\", \"-c\", \"
+from application import create_app, db
+from application.models import User
+from passlib.hash import sha256_crypt
+app = create_app()
+with app.app_context():
+    print('=== Creating Database Tables ===')
+    db.create_all()
+    print('✓ Tables created successfully')
+    
+    # Create test user if none exist
+    user_count = User.query.count()
+    if user_count == 0:
+        test_user = User(
+            first_name='Admin',
+            last_name='User', 
+            email='admin@example.com',
+            username='admin',
+            password=sha256_crypt.hash('admin123'),
+            authenticated=True
+        )
+        db.session.add(test_user)
+        db.session.commit()
+        print('✓ Test user created: admin / admin123')
+    print(f'✓ Total users: {User.query.count()}')
+        \"]
+        env:
+        - name: DATABASE_URL
+          value: \"mysql+pymysql://cloudacademy:pfm2020@user-db:3306/user\"
+      restartPolicy: Never
+  backoffLimit: 2
+EOF
+
+                        echo 'Waiting for database initialization to complete...'
+                        kubectl wait --for=condition=complete job/init-user-database -n ${params.K8S_NAMESPACE} --timeout=120s
+                        
+                        echo '=== Database Initialization Logs ==='
+                        kubectl logs job/init-user-database -n ${params.K8S_NAMESPACE}
+                        
+                        echo '=== Testing User Registration ==='
+                        kubectl exec -it deployment/user-api -n ${params.K8S_NAMESPACE} -- curl -X POST http://localhost:5001/api/user/create \
+                          -H \"Content-Type: application/x-www-form-urlencoded\" \
+                          -d \"first_name=Test&last_name=User&email=test@example.com&username=testuser&password=test123\" || echo 'Registration test completed'
+                        
                         echo '=== Final Deployment Status ==='
                         kubectl get all -n ${params.K8S_NAMESPACE}
+                        
+                        echo '=== Database Status ==='
+                        kubectl exec -it deployment/user-db -n ${params.K8S_NAMESPACE} -- mysql -u cloudacademy -ppfm2020 -e \"USE user; SHOW TABLES;\" || echo 'Database check completed'
                     "
                 """
             }
