@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cuser-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cuser-service
+  template:
+    metadata:
+      labels:
+        app: cuser-service
+    spec:
+      containers:
+        - name: cuser-service
+          image: mrkendono/userservice:latest
+          ports:
+            - containerPort: 5001
+          env:
+            - name: DB_HOST
+              value: user-db
+            - name: DB_PORT
+              value: "3306"
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: user-db-secret
+                  key: MYSQL_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: user-db-secret
+                  key: MYSQL_PASSWORD
+            - name: DB_NAME
+              value: user
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
+              
+              
