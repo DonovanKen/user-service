@@ -6,9 +6,7 @@ metadata:
   labels:
     app: user-api
 spec:
-  type: LoadBalancer
-  externalIPs:
-    - 192.168.2.88
+  type: ClusterIP  # Changed from LoadBalancer
   selector:
     app: user-api
   ports:

@@ -29,3 +29,22 @@ spec:
           value: "cloudacademy"
         - name: MYSQL_PASSWORD
           value: "pfm_2020"
+        # Add health checks for database
+        livenessProbe:
+          exec:
+            command:
+            - mysqladmin
+            - ping
+            - -h
+            - localhost
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - mysqladmin
+            - ping
+            - -h
+            - localhost
+          initialDelaySeconds: 5
+          periodSeconds: 5

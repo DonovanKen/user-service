@@ -6,6 +6,7 @@ metadata:
   labels:
     app: user-db
 spec:
+  type: ClusterIP
   selector:
     app: user-db
   ports:
