@@ -80,79 +80,23 @@ pipeline {
                         echo 'Creating namespace if it does not exist'
                         kubectl create namespace ${params.K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
                         
-                        # Deploy database first
-                        echo '=== Deploying Database ==='
-                        kubectl apply -f mysql-deployment.yaml -n ${params.K8S_NAMESPACE}
-                        kubectl apply -f mysql-service.yaml -n ${params.K8S_NAMESPACE}
+                        # Deploy ALL manifests from your k8s directory
+                        echo '=== Deploying All Manifests ==='
+                        kubectl apply -f . -n ${params.K8S_NAMESPACE}
                         
                         echo 'Waiting for database to be ready...'
                         kubectl wait --for=condition=ready pod -l app=user-db -n ${params.K8S_NAMESPACE} --timeout=300s
                         
-                        # Deploy user service with ClusterIP
-                        echo '=== Deploying User Service ==='
-                        kubectl apply -f deployment.yaml -n ${params.K8S_NAMESPACE}
-                        kubectl apply -f service.yaml -n ${params.K8S_NAMESPACE}
+                        echo 'Waiting for user service to be ready...'
+                        kubectl wait --for=condition=available deployment/cuser-service -n ${params.K8S_NAMESPACE} --timeout=300s
                         
-                        echo 'Waiting for user service deployment to be ready'
-                        kubectl wait --for=condition=available deployment/user-api -n ${params.K8S_NAMESPACE} --timeout=300s
-                        
-                        echo '=== Initializing Database Tables ==='
-                        kubectl apply -f - <<EOF
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: init-user-database
-  namespace: ${params.K8S_NAMESPACE}
-spec:
-  template:
-    spec:
-      containers:
-      - name: init-db
-        image: ${params.DOCKERHUB_USER}/${params.USER_SERVICE}:${params.IMAGE_TAG}
-        command: 
-        - python
-        - -c
-        - |
-          from application import create_app, db
-          from application.models import User
-          from passlib.hash import sha256_crypt
-          app = create_app()
-          with app.app_context():
-              print('=== Creating Database Tables ===')
-              db.create_all()
-              print('✓ Tables created successfully')
-              
-              # Create test user if none exist
-              user_count = User.query.count()
-              if user_count == 0:
-                  test_user = User(
-                      first_name='Admin',
-                      last_name='User', 
-                      email='admin@example.com',
-                      username='admin',
-                      password=sha256_crypt.hash('admin123'),
-                      authenticated=True
-                  )
-                  db.session.add(test_user)
-                  db.session.commit()
-                  print('✓ Test user created: admin / admin123')
-              print(f'✓ Total users: {User.query.count()}')
-        env:
-        - name: DATABASE_URL
-          value: \"mysql+pymysql://cloudacademy:pfm_2020@user-db:3306/user\"
-      restartPolicy: Never
-  backoffLimit: 2
-EOF
-
-                        echo 'Waiting for database initialization to complete...'
-                        kubectl wait --for=condition=complete job/init-user-database -n ${params.K8S_NAMESPACE} --timeout=120s
-                        
-                        echo '=== Database Initialization Logs ==='
-                        kubectl logs job/init-user-database -n ${params.K8S_NAMESPACE}
+                        echo '=== Running Database Migration Job ==='
+                        # Wait a bit for services to stabilize
+                        sleep 30
                         
                         echo '=== Testing Service Connectivity ==='
-                        # Test internal service connectivity
-                        kubectl exec deployment/user-api -n ${params.K8S_NAMESPACE} -- curl -f http://localhost:5001/health || echo 'Health check completed'
+                        # Test internal service connectivity - use cuser-service instead of user-api
+                        kubectl exec deployment/cuser-service -n ${params.K8S_NAMESPACE} -- curl -f http://localhost:5001/health || echo 'Health check completed'
                         
                         echo '=== Final Deployment Status ==='
                         kubectl get all -n ${params.K8S_NAMESPACE}
@@ -161,7 +105,10 @@ EOF
                         kubectl get svc -n ${params.K8S_NAMESPACE}
                         
                         echo '=== Testing Internal Service Discovery ==='
-                        kubectl run test-curl --image=curlimages/curl -n ${params.K8S_NAMESPACE} --rm -i --restart=Never --command -- sh -c 'curl -v http://user-api:5001/health && echo \"✓ Internal service discovery working!\"' || echo 'Service discovery test completed'
+                        kubectl run test-curl --image=curlimages/curl -n ${params.K8S_NAMESPACE} --rm -i --restart=Never --command -- sh -c 'curl -v http://cuser-service:5001/health && echo \"✓ Internal service discovery working!\"' || echo 'Service discovery test completed'
+                        
+                        echo '=== Checking Pod Logs ==='
+                        kubectl logs -n ${params.K8S_NAMESPACE} -l app=cuser-service --tail=10
                     "
                 """
             }

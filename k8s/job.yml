@@ -8,7 +8,7 @@ spec:
     spec:
       containers:
         - name: migrate
-          image: mrkendono/frontend:latest
+          image: mrkendono/userservice:latest  # CHANGED FROM frontend TO userservice
           command: ["sh", "-c"]
           args:
             - flask db init && flask db migrate && flask db upgrade
