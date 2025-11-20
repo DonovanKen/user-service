@@ -13,11 +13,15 @@ spec:
       labels:
         app: user-db
     spec:
+      hostNetwork: true  # ADD THIS
+      nodeSelector:
+        kubernetes.io/hostname: kubernetes  # ADD THIS
       containers:
         - name: mysql
           image: mysql:8
           ports:
             - containerPort: 3306
+            - hostPort: 3306  # ADD THIS
           env:
             - name: MYSQL_ROOT_PASSWORD
               valueFrom:

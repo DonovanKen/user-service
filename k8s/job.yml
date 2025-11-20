@@ -6,15 +6,18 @@ metadata:
 spec:
   template:
     spec:
+      hostNetwork: true  # ADD THIS LINE
+      nodeSelector:
+        kubernetes.io/hostname: kubernetes  # ADD THIS LINE
       containers:
         - name: migrate
-          image: mrkendono/userservice:latest  # CHANGED FROM frontend TO userservice
+          image: mrkendono/userservice:latest
           command: ["sh", "-c"]
           args:
-            - flask db init && flask db migrate && flask db upgrade
+            - sleep 10 && flask db init && flask db migrate && flask db upgrade
           env:
             - name: DB_HOST
-              value: user-db
+              value: "127.0.0.1"  # CHANGE FROM user-db TO 127.0.0.1
             - name: DB_PORT
               value: "3306"
             - name: DB_NAME

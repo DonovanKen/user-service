@@ -13,6 +13,9 @@ spec:
       labels:
         app: cuser-service
     spec:
+      hostNetwork: true  # ADD THIS
+      nodeSelector:
+        kubernetes.io/hostname: kubernetes  # ADD THIS
       containers:
         - name: cuser-service
           image: mrkendono/userservice:latest
@@ -20,7 +23,7 @@ spec:
             - containerPort: 5001
           env:
             - name: DB_HOST
-              value: user-db
+              value: "127.0.0.1"  # CHANGE FROM user-db TO 127.0.0.1
             - name: DB_PORT
               value: "3306"
             - name: DB_USER
@@ -42,5 +45,3 @@ spec:
             limits:
               cpu: "250m"
               memory: "256Mi"
-              
-              
